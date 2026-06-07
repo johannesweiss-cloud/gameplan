@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gameplan – Routinen Tracker</title>
+<style>
+  :root{
+    --bg:#f5f6f9; --panel:#ffffff; --panel2:#f1f3f7; --line:#e4e7ee;
+    --text:#1b2030; --muted:#737b8c; --accent:#3b6dff; --good:#1ca672; --bad:#e5484d;
+    --shadow:0 1px 3px rgba(20,30,60,.06),0 1px 2px rgba(20,30,60,.04);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.5;
+  }
+  .wrap{max-width:940px; margin:0 auto; padding:26px 18px 80px}
+  header.top{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:6px; flex-wrap:wrap}
+  h1{font-size:26px; margin:0; letter-spacing:-.5px}
+  h1 .dot{color:var(--accent)}
+  .today{color:var(--muted); font-size:14px}
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap}
+  button{font-family:inherit; cursor:pointer}
+  .btn{background:var(--panel); color:var(--text); border:1px solid var(--line); padding:8px 13px; border-radius:10px; font-size:13px; transition:.15s; box-shadow:var(--shadow)}
+  .btn:hover{border-color:var(--accent); color:var(--accent)}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600}
+  .btn.primary:hover{filter:brightness(1.06); color:#fff}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-top:16px; box-shadow:var(--shadow)}
+  .card h2{font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 16px; font-weight:700}
+
+  /* summary strip */
+  .summary{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:16px}
+  .kpi{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow)}
+  .kpi .k-label{font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); font-weight:700}
+  .kpi .k-val{font-size:30px; font-weight:800; letter-spacing:-1px; margin-top:6px; line-height:1}
+  .kpi .k-val small{font-size:14px; font-weight:600; color:var(--muted)}
+  .kpi .k-sub{font-size:12px; color:var(--muted); margin-top:5px}
+  .ring{--p:0; width:54px; height:54px; border-radius:50%; float:right;
+        background:conic-gradient(var(--accent) calc(var(--p)*1%), var(--panel2) 0);
+        display:flex; align-items:center; justify-content:center; margin:-4px 0 0 0}
+  .ring::after{content:""; width:40px; height:40px; border-radius:50%; background:var(--panel)}
+  .ring span{position:absolute; font-size:13px; font-weight:700}
+
+  /* week nav */
+  .weeknav{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
+  .weeknav .range{font-weight:700; font-size:15px}
+  .nav-btn{background:var(--panel); border:1px solid var(--line); color:var(--text); width:34px; height:34px; border-radius:9px; font-size:16px; box-shadow:var(--shadow)}
+  .nav-btn:hover{border-color:var(--accent); color:var(--accent)}
+
+  /* week grid */
+  .gridscroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
+  table.grid{width:100%; border-collapse:collapse; min-width:430px}
+  table.grid th{font-size:11px; color:var(--muted); font-weight:500; padding:4px; text-align:center}
+  table.grid th.namecol{text-align:left; width:32%; min-width:120px}
+  table.grid td{padding:5px 3px; text-align:center}
+  td.name{text-align:left; font-weight:700; font-size:15px}
+  td.name .tgt{display:block; font-size:11px; color:var(--muted); font-weight:500}
+  .cell{width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:var(--panel2); margin:0 auto; cursor:pointer; transition:.12s; position:relative}
+  .cell:hover{border-color:var(--accent)}
+  .cell.on{border-color:transparent}
+  .cell.on::after{content:"✓"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:14px; font-weight:800}
+  .cell.future{opacity:.4; cursor:default}
+  .cell.today-mark{box-shadow:0 0 0 2px var(--accent)}
+  .status{font-size:13px; font-weight:800; padding:3px 9px; border-radius:20px; white-space:nowrap}
+  .status.met{background:rgba(28,166,114,.13); color:var(--good)}
+  .status.miss{background:rgba(229,72,77,.10); color:var(--bad)}
+  th.daydate{font-weight:400}
+  th.daydate b{display:block; font-size:13px; color:var(--text); font-weight:700}
+
+  /* per-routine stats */
+  .stat-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px}
+  .stat{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:16px}
+  .stat .label{font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px; margin-bottom:12px}
+  .swatch{width:12px; height:12px; border-radius:4px; flex:none}
+  .quote{font-size:34px; font-weight:800; letter-spacing:-1px; line-height:1}
+  .quote small{font-size:14px; color:var(--muted); font-weight:600; margin-left:3px}
+  .bar{height:7px; background:#e4e7ee; border-radius:4px; margin:12px 0; overflow:hidden}
+  .bar > div{height:100%; border-radius:4px}
+  .sub{font-size:12px; color:var(--muted); display:flex; justify-content:space-between; gap:6px; flex-wrap:wrap}
+  .sub b{color:var(--text); font-weight:700}
+
+  /* history bars */
+  .hist{display:flex; flex-direction:column; gap:18px}
+  .hrow .hlabel{font-size:14px; font-weight:700; margin-bottom:7px; display:flex; align-items:center; gap:8px}
+  .weeks{display:flex; gap:3px; align-items:flex-end; height:54px}
+  .wk{flex:1; min-width:6px; background:#e4e7ee; border-radius:3px 3px 0 0; transition:.15s}
+  .wk:hover{filter:brightness(.92)}
+  .wk-axis{display:flex; gap:3px; margin-top:5px}
+  .wk-axis span{flex:1; text-align:center; font-size:9px; color:var(--muted)}
+
+  .empty{text-align:center; color:var(--muted); padding:28px 10px}
+
+  /* modal */
+  .overlay{position:fixed; inset:0; background:rgba(20,28,48,.45); display:none; align-items:flex-start; justify-content:center; padding:40px 16px; z-index:50; overflow:auto}
+  .overlay.show{display:flex}
+  .modal{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:24px; width:100%; max-width:460px; box-shadow:0 20px 50px rgba(20,30,60,.18)}
+  .modal h3{margin:0 0 18px; font-size:18px}
+  .field{margin-bottom:14px}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.5px; font-weight:600}
+  .field input{width:100%; background:var(--panel); border:1px solid var(--line); color:var(--text); padding:10px 12px; border-radius:9px; font-size:15px; font-family:inherit}
+  .field input:focus{outline:none; border-color:var(--accent)}
+  .colors{display:flex; gap:8px; flex-wrap:wrap}
+  .colors button{width:30px; height:30px; border-radius:8px; border:2px solid transparent}
+  .colors button.sel{border-color:var(--text)}
+  .modal-actions{display:flex; justify-content:space-between; gap:8px; margin-top:22px}
+  .routine-list{display:flex; flex-direction:column; gap:8px; margin-bottom:18px}
+  .rl-item{display:flex; align-items:center; gap:10px; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 12px}
+  .rl-item .nm{flex:1; font-weight:700}
+  .rl-item .tg{font-size:12px; color:var(--muted)}
+  .rl-item .x{background:none; border:none; color:var(--muted); font-size:18px; padding:0 4px}
+  .rl-item .x:hover{color:var(--bad)}
+  .link{background:none; border:none; color:var(--accent); font-size:13px; padding:0; font-weight:600}
+  .link:hover{text-decoration:underline}
+
+  /* sync */
+  .sync-pill{display:flex; align-items:center; gap:7px}
+  .dotled{width:8px; height:8px; border-radius:50%; background:#c2c8d4; flex:none}
+  .dotled.ok{background:var(--good)} .dotled.saving{background:var(--accent); animation:pulse 1s infinite}
+  .dotled.error,.dotled.offline{background:var(--bad)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .modal p.note{font-size:13px; color:var(--muted); margin:0 0 16px}
+  .modal ol{font-size:13.5px; color:var(--text); padding-left:20px; margin:0 0 16px}
+  .modal ol li{margin-bottom:8px}
+  .modal code{background:var(--panel2); border:1px solid var(--line); padding:1px 6px; border-radius:5px; font-size:12.5px}
+  .synced-box{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:14px; font-size:13.5px; margin-bottom:16px}
+  .synced-box b{color:var(--good)}
+
+  @media(max-width:680px){
+    .summary{grid-template-columns:repeat(2,1fr)}
+    .kpi .k-val{font-size:26px}
+    h1{font-size:23px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Game<span class="dot">·</span>plan</h1>
+      <div class="today" id="todayLabel"></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn sync-pill" id="syncBtn"><span class="dotled" id="syncDot"></span><span id="syncText">Sync einrichten</span></button>
+      <button class="btn" id="manageBtn">Routinen</button>
+      <button class="btn" id="exportBtn">Export</button>
+      <button class="btn" id="importBtn">Import</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+    </div>
+  </header>
+
+  <!-- SUMMARY -->
+  <div class="summary" id="summary"></div>
+
+  <!-- WEEK -->
+  <div class="card">
+    <div class="weeknav">
+      <button class="nav-btn" id="prevWeek">‹</button>
+      <span class="range" id="weekRange"></span>
+      <button class="nav-btn" id="nextWeek">›</button>
+    </div>
+    <div class="gridscroll"><div id="weekGrid"></div></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="card">
+    <h2>Pro Routine – Erfüllungsquote seit Start</h2>
+    <div class="stat-grid" id="statGrid"></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="card">
+    <h2>Verlauf – letzte 12 Wochen</h2>
+    <div class="hist" id="history"></div>
+  </div>
+</div>
+
+<!-- MANAGE MODAL -->
+<div class="overlay" id="manageOverlay">
+  <div class="modal">
+    <h3>Routinen verwalten</h3>
+    <div class="routine-list" id="manageList"></div>
+    <button class="link" id="addRoutineBtn">+ Neue Routine</button>
+    <div class="modal-actions">
+      <span></span>
+      <button class="btn primary" id="closeManage">Fertig</button>
+    </div>
+  </div>
+</div>
+
+<!-- SYNC MODAL -->
+<div class="overlay" id="syncOverlay">
+  <div class="modal">
+    <h3>Cloud-Sync (GitHub)</h3>
+    <div id="syncBody"></div>
+    <div class="modal-actions">
+      <button class="btn" id="closeSync">Schließen</button>
+      <span></span>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="overlay" id="editOverlay">
+  <div class="modal">
+    <h3 id="editTitle">Neue Routine</h3>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="rName" placeholder="z.B. Physio, Laufen, Lesen …">
+    </div>
+    <div class="field">
+      <label>Ziel pro Woche (wie oft?)</label>
+      <input type="number" id="rTarget" min="1" max="14" value="3">
+    </div>
+    <div class="field">
+      <label>Farbe</label>
+      <div class="colors" id="colorPicker"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="cancelEdit">Abbrechen</button>
+      <button class="btn primary" id="saveEdit">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const PALETTE = ["#3b6dff","#1ca672","#ff8f3b","#a855f7","#eab308","#06b6d4","#ec4899","#65a30d"];
+const DAYS = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+const STORE_KEY = "gameplan.v1";
+
+let state = load();
+let weekOffset = 0;
+let editingId = null;
+let pickedColor = PALETTE[0];
+
+function load(){
+  try{ const raw=localStorage.getItem(STORE_KEY); if(raw) return JSON.parse(raw); }catch(e){}
+  return {
+    updatedAt:0,
+    routines:[
+      {id:uid(), name:"Physio", target:3, color:PALETTE[0], created:todayStr()},
+      {id:uid(), name:"Laufen", target:1, color:PALETTE[1], created:todayStr()},
+    ],
+    logs:{}
+  };
+}
+function persist(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+function save(){ state.updatedAt=Date.now(); persist(); schedulePush(); }
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+// ---------- dates ----------
+function todayStr(){ return fmt(new Date()); }
+function fmt(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function parse(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
+function getMonday(date){ const d=new Date(date); const day=(d.getDay()+6)%7; d.setHours(0,0,0,0); d.setDate(d.getDate()-day); return d; }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function weekDates(monday){ return Array.from({length:7},(_,i)=>fmt(addDays(monday,i))); }
+function fmtShort(d){ return `${d.getDate()}.${d.getMonth()+1}.`; }
+
+// ---------- logs ----------
+function isDone(rid,ds){ return !!(state.logs[rid] && state.logs[rid][ds]); }
+function toggle(rid,ds){
+  if(!state.logs[rid]) state.logs[rid]={};
+  if(state.logs[rid][ds]) delete state.logs[rid][ds]; else state.logs[rid][ds]=true;
+  save();
+}
+function countInWeek(rid,monday){ return weekDates(monday).reduce((n,ds)=>n+(isDone(rid,ds)?1:0),0); }
+function weeksSinceStart(r){
+  const diff=Math.round((getMonday(new Date())-getMonday(parse(r.created)))/(7*864e5));
+  return Math.max(1, diff+1);
+}
+function currentStreak(r){
+  let s=0;
+  for(let off=0; off<400; off++){
+    const mon=getMonday(addDays(new Date(),-off*7));
+    if(mon<getMonday(parse(r.created))) break;
+    const met=countInWeek(r.id,mon)>=r.target;
+    if(off===0 && !met) continue;        // current week still running
+    if(met) s++; else break;
+  }
+  return s;
+}
+function recordStreak(r){
+  const total=weeksSinceStart(r); let best=0,cur=0;
+  for(let i=0;i<total;i++){
+    const mon=getMonday(addDays(getMonday(parse(r.created)), i*7));
+    if(countInWeek(r.id,mon)>=r.target){ cur++; best=Math.max(best,cur);} else cur=0;
+  }
+  return best;
+}
+
+// ---------- render ----------
+function render(){
+  document.getElementById("todayLabel").textContent =
+    new Date().toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  renderSummary(); renderWeek(); renderStats(); renderHistory();
+}
+
+function renderSummary(){
+  const host=document.getElementById("summary");
+  const rs=state.routines;
+  const curMon=getMonday(new Date());
+  // this week
+  let wkDone=0, wkTarget=0;
+  rs.forEach(r=>{ wkDone+=Math.min(countInWeek(r.id,curMon),r.target); wkTarget+=r.target; });
+  const wkPct=wkTarget?Math.round(wkDone/wkTarget*100):0;
+  // overall quote
+  let done=0, planned=0;
+  rs.forEach(r=>{ done+=Object.keys(state.logs[r.id]||{}).length; planned+=weeksSinceStart(r)*r.target; });
+  const overall=planned?Math.round(done/planned*100):0;
+  // best streak ever
+  const best=rs.reduce((m,r)=>Math.max(m,recordStreak(r)),0);
+  // total units
+  const totalUnits=rs.reduce((n,r)=>n+Object.keys(state.logs[r.id]||{}).length,0);
+
+  host.innerHTML = `
+    <div class="kpi">
+      <div class="ring" style="--p:${wkPct}"><span>${wkPct}%</span></div>
+      <div class="k-label">Diese Woche</div>
+      <div class="k-val">${wkDone}<small>/${wkTarget}</small></div>
+      <div class="k-sub">Einheiten erledigt</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Gesamt-Quote</div>
+      <div class="k-val">${overall}<small>%</small></div>
+      <div class="k-sub">seit Start, alle Routinen</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Beste Streak</div>
+      <div class="k-val">${best}<small> Wo.</small></div>
+      <div class="k-sub">längste Serie bisher 🔥</div>
+    </div>
+    <div class="kpi">
+      <div class="k-label">Einheiten gesamt</div>
+      <div class="k-val">${totalUnits}</div>
+      <div class="k-sub">über alle Zeit</div>
+    </div>`;
+}
+
+function renderWeek(){
+  const monday=getMonday(addDays(new Date(),weekOffset*7));
+  const dates=weekDates(monday); const tStr=todayStr(); const sunday=addDays(monday,6);
+  document.getElementById("weekRange").textContent =
+    `${fmtShort(monday)} – ${fmtShort(sunday)}`+(weekOffset===0?"  ·  diese Woche":"");
+  const grid=document.getElementById("weekGrid");
+  if(state.routines.length===0){
+    grid.innerHTML=`<div class="empty">Noch keine Routinen. Klick oben auf <b>Routinen</b>, um deine erste anzulegen.</div>`; return;
+  }
+  let html=`<table class="grid"><thead><tr><th class="namecol"></th>`;
+  dates.forEach((ds,i)=>{ const d=parse(ds); html+=`<th class="daydate">${DAYS[i]}<b>${d.getDate()}.</b></th>`; });
+  html+=`<th></th></tr></thead><tbody>`;
+  state.routines.forEach(r=>{
+    const done=countInWeek(r.id,monday); const met=done>=r.target;
+    html+=`<tr><td class="name">${escapeHtml(r.name)}<span class="tgt">Ziel: ${r.target}× / Woche</span></td>`;
+    dates.forEach(ds=>{
+      const future=ds>tStr; const on=isDone(r.id,ds);
+      const cls=["cell"]; if(on)cls.push("on"); if(future)cls.push("future"); if(ds===tStr)cls.push("today-mark");
+      const style=on?`style="background:${r.color}"`:"";
+      html+=`<td><div class="${cls.join(" ")}" ${style} data-rid="${r.id}" data-date="${ds}" data-future="${future}"></div></td>`;
+    });
+    html+=`<td><span class="status ${met?"met":"miss"}">${done}/${r.target}</span></td></tr>`;
+  });
+  html+=`</tbody></table>`;
+  grid.innerHTML=html;
+  grid.querySelectorAll(".cell").forEach(c=>{
+    if(c.dataset.future==="true") return;
+    c.addEventListener("click",()=>{ toggle(c.dataset.rid,c.dataset.date); render(); });
+  });
+}
+
+function renderStats(){
+  const host=document.getElementById("statGrid");
+  if(state.routines.length===0){ host.innerHTML=`<div class="empty">—</div>`; return; }
+  host.innerHTML=state.routines.map(r=>{
+    const weeks=weeksSinceStart(r);
+    const planned=weeks*r.target;
+    const doneTotal=Object.keys(state.logs[r.id]||{}).length;
+    const quote=planned?Math.round(doneTotal/planned*100):0;
+    // last 4 weeks
+    let l4done=0,l4plan=0;
+    for(let i=0;i<4;i++){ const mon=getMonday(addDays(new Date(),-i*7)); if(mon>=getMonday(parse(r.created))){ l4done+=countInWeek(r.id,mon); l4plan+=r.target; } }
+    const l4=l4plan?Math.round(l4done/l4plan*100):0;
+    return `
+      <div class="stat">
+        <div class="label"><span class="swatch" style="background:${r.color}"></span>${escapeHtml(r.name)}</div>
+        <div class="quote">${quote}<small>%</small></div>
+        <div class="bar"><div style="width:${Math.min(100,quote)}%;background:${r.color}"></div></div>
+        <div class="sub"><span><b>${doneTotal}</b>/${planned} Einheiten</span><span>letzte 4 Wo.: <b>${l4}%</b></span></div>
+        <div class="sub" style="margin-top:6px"><span>🔥 Streak: <b>${currentStreak(r)}</b></span><span>Rekord: <b>${recordStreak(r)}</b> Wo.</span></div>
+      </div>`;
+  }).join("");
+}
+
+function renderHistory(){
+  const host=document.getElementById("history");
+  if(state.routines.length===0){ host.innerHTML=`<div class="empty">—</div>`; return; }
+  const N=12;
+  host.innerHTML=state.routines.map(r=>{
+    let bars="",axis="";
+    for(let i=N-1;i>=0;i--){
+      const mon=getMonday(addDays(new Date(),-i*7));
+      const done=countInWeek(r.id,mon);
+      const ratio=r.target?Math.min(1,done/r.target):0;
+      const h=8+ratio*46; const met=done>=r.target;
+      const col=done===0?"#e4e7ee":(met?r.color:r.color+"66");
+      bars+=`<div class="wk" style="height:${h}px;background:${col}" title="${fmtShort(mon)}: ${done}/${r.target}"></div>`;
+      axis+=`<span>${i%2===0?mon.getDate()+"."+(mon.getMonth()+1):""}</span>`;
+    }
+    return `<div class="hrow"><div class="hlabel"><span class="swatch" style="background:${r.color}"></span>${escapeHtml(r.name)}</div><div class="weeks">${bars}</div><div class="wk-axis">${axis}</div></div>`;
+  }).join("");
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+// ---------- week nav ----------
+document.getElementById("prevWeek").onclick=()=>{ weekOffset--; renderWeek(); };
+document.getElementById("nextWeek").onclick=()=>{ if(weekOffset<0){weekOffset++; renderWeek();} };
+
+// ---------- manage ----------
+const manageOverlay=document.getElementById("manageOverlay");
+document.getElementById("manageBtn").onclick=()=>{ renderManage(); manageOverlay.classList.add("show"); };
+document.getElementById("closeManage").onclick=()=>manageOverlay.classList.remove("show");
+manageOverlay.onclick=e=>{ if(e.target===manageOverlay) manageOverlay.classList.remove("show"); };
+function renderManage(){
+  const list=document.getElementById("manageList");
+  if(state.routines.length===0){ list.innerHTML=`<div class="empty" style="padding:10px">Noch keine Routinen.</div>`; return; }
+  list.innerHTML=state.routines.map(r=>`
+    <div class="rl-item">
+      <span class="swatch" style="background:${r.color}"></span>
+      <span class="nm">${escapeHtml(r.name)}</span>
+      <span class="tg">${r.target}×/Wo.</span>
+      <button class="link" data-edit="${r.id}">bearbeiten</button>
+      <button class="x" data-del="${r.id}" title="Löschen">×</button>
+    </div>`).join("");
+  list.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    const r=state.routines.find(x=>x.id===b.dataset.del);
+    if(confirm(`„${r.name}" wirklich löschen? Alle erfassten Einheiten gehen verloren.`)){
+      state.routines=state.routines.filter(x=>x.id!==b.dataset.del);
+      delete state.logs[b.dataset.del]; save(); renderManage(); render();
+    }
+  });
+  list.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));
+}
+
+// ---------- edit ----------
+const editOverlay=document.getElementById("editOverlay");
+function buildColorPicker(){
+  const host=document.getElementById("colorPicker");
+  host.innerHTML=PALETTE.map(c=>`<button data-c="${c}" style="background:${c}"></button>`).join("");
+  host.querySelectorAll("button").forEach(b=>b.onclick=()=>{ pickedColor=b.dataset.c; markColor(); });
+}
+function markColor(){ document.querySelectorAll("#colorPicker button").forEach(b=>b.classList.toggle("sel",b.dataset.c===pickedColor)); }
+document.getElementById("addRoutineBtn").onclick=()=>openEdit(null);
+function openEdit(id){
+  editingId=id;
+  const r=id?state.routines.find(x=>x.id===id):null;
+  document.getElementById("editTitle").textContent=r?"Routine bearbeiten":"Neue Routine";
+  document.getElementById("rName").value=r?r.name:"";
+  document.getElementById("rTarget").value=r?r.target:3;
+  pickedColor=r?r.color:PALETTE[state.routines.length%PALETTE.length];
+  buildColorPicker(); markColor();
+  editOverlay.classList.add("show"); document.getElementById("rName").focus();
+}
+document.getElementById("cancelEdit").onclick=()=>editOverlay.classList.remove("show");
+editOverlay.onclick=e=>{ if(e.target===editOverlay) editOverlay.classList.remove("show"); };
+document.getElementById("saveEdit").onclick=()=>{
+  const name=document.getElementById("rName").value.trim();
+  const target=Math.max(1,Math.min(14,parseInt(document.getElementById("rTarget").value)||1));
+  if(!name){ alert("Bitte einen Namen eingeben."); return; }
+  if(editingId){ const r=state.routines.find(x=>x.id===editingId); r.name=name; r.target=target; r.color=pickedColor; }
+  else state.routines.push({id:uid(),name,target,color:pickedColor,created:todayStr()});
+  save(); editOverlay.classList.remove("show"); renderManage(); render();
+};
+document.getElementById("rName").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("saveEdit").click(); });
+
+// ---------- export / import ----------
+document.getElementById("exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=`gameplan-backup-${todayStr()}.json`; a.click(); URL.revokeObjectURL(a.href);
+};
+document.getElementById("importBtn").onclick=()=>document.getElementById("importFile").click();
+document.getElementById("importFile").onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=()=>{ try{
+      const data=JSON.parse(reader.result);
+      if(!data.routines||!data.logs) throw new Error("Ungültiges Format");
+      if(confirm("Aktuelle Daten durch die Datei ersetzen?")){ state=data; save(); render(); }
+    }catch(err){ alert("Konnte Datei nicht lesen: "+err.message); } };
+  reader.readAsText(f); e.target.value="";
+};
+
+// ===================== CLOUD SYNC (GitHub Gist) =====================
+const SYNC_KEY="gameplan.sync";
+const GIST_FILE="gameplan-data.json";
+let sync=loadSync();          // {token, gistId}
+let pushTimer=null, pulling=false, lastFocusPull=0;
+
+function loadSync(){ try{ return JSON.parse(localStorage.getItem(SYNC_KEY))||{}; }catch(e){ return {}; } }
+function saveSync(){ localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); }
+function isConnected(){ return !!(sync.token && sync.gistId); }
+
+function setSyncStatus(s,msg){
+  const dot=document.getElementById("syncDot"), txt=document.getElementById("syncText");
+  dot.className="dotled"+(s?" "+s:"");
+  const labels={ok:"Synchron",saving:"Speichert…",error:"Fehler",offline:"Offline"};
+  txt.textContent = msg || (isConnected()? (labels[s]||"Synchron") : "Sync einrichten");
+}
+
+async function ghApi(method,url,body){
+  const res=await fetch(url,{
+    method,
+    headers:{Authorization:"Bearer "+sync.token, Accept:"application/vnd.github+json", "Content-Type":"application/json"},
+    body: body?JSON.stringify(body):undefined
+  });
+  if(!res.ok){
+    const e=new Error("GitHub "+res.status); e.status=res.status; throw e;
+  }
+  return res.json();
+}
+
+async function pull(){
+  if(!isConnected()||pulling) return;
+  pulling=true; setSyncStatus("saving");
+  try{
+    const g=await ghApi("GET","https://api.github.com/gists/"+sync.gistId);
+    const f=g.files && g.files[GIST_FILE];
+    if(f){
+      let content=f.content;
+      if(f.truncated){ content=await (await fetch(f.raw_url)).text(); }
+      const remote=JSON.parse(content);
+      if((remote.updatedAt||0) >= (state.updatedAt||0)){
+        state=remote; persist(); render();   // render rebuilds toolbar? no -> update status after
+        setSyncStatus("ok");
+      }else{
+        await push();                          // local is newer
+      }
+    }else{ await push(); }
+    setSyncStatus("ok");
+  }catch(err){
+    setSyncStatus(err.status===401?"error":"offline", err.status===401?"Token ungültig":"Offline");
+  }finally{ pulling=false; }
+}
+
+function schedulePush(){
+  if(!isConnected()) return;
+  clearTimeout(pushTimer);
+  setSyncStatus("saving");
+  pushTimer=setTimeout(push,1200);
+}
+async function push(){
+  if(!isConnected()) return;
+  setSyncStatus("saving");
+  try{
+    await ghApi("PATCH","https://api.github.com/gists/"+sync.gistId,
+      {files:{[GIST_FILE]:{content:JSON.stringify(state)}}});
+    setSyncStatus("ok");
+  }catch(err){
+    setSyncStatus(err.status===401?"error":"offline", err.status===401?"Token ungültig":"Offline");
+  }
+}
+
+async function connect(token){
+  sync={token};                                 // temp, for ghApi auth
+  setSyncStatus("saving","Verbinde…");
+  // 1) validate token
+  await ghApi("GET","https://api.github.com/user");
+  // 2) find existing gist with our file (so other devices auto-link)
+  const gists=await ghApi("GET","https://api.github.com/gists?per_page=100");
+  let g=gists.find(x=>x.files && x.files[GIST_FILE]);
+  if(g){
+    sync={token, gistId:g.id}; saveSync(); await pull();
+  }else{
+    const created=await ghApi("POST","https://api.github.com/gists",
+      {description:"Gameplan – Routinen Daten", public:false, files:{[GIST_FILE]:{content:JSON.stringify(state)}}});
+    sync={token, gistId:created.id}; saveSync(); setSyncStatus("ok");
+  }
+}
+function disconnect(){ sync={}; saveSync(); setSyncStatus(null); renderSyncBody(); }
+
+// ----- sync modal UI -----
+const syncOverlay=document.getElementById("syncOverlay");
+document.getElementById("syncBtn").onclick=()=>{ renderSyncBody(); syncOverlay.classList.add("show"); };
+document.getElementById("closeSync").onclick=()=>syncOverlay.classList.remove("show");
+syncOverlay.onclick=e=>{ if(e.target===syncOverlay) syncOverlay.classList.remove("show"); };
+
+function renderSyncBody(){
+  const body=document.getElementById("syncBody");
+  if(isConnected()){
+    body.innerHTML=`
+      <div class="synced-box"><b>✓ Verbunden</b> mit deinem GitHub-Schließfach.<br>
+      Deine Daten synchronisieren sich automatisch über alle Geräte.</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn primary" id="syncNow">Jetzt synchronisieren</button>
+        <button class="btn" id="syncDisconnect">Auf diesem Gerät trennen</button>
+      </div>`;
+    body.querySelector("#syncNow").onclick=async()=>{ await pull(); renderSyncBody(); };
+    body.querySelector("#syncDisconnect").onclick=()=>{ if(confirm("Sync auf diesem Gerät trennen? Daten in der Cloud bleiben erhalten.")) disconnect(); };
+  }else{
+    body.innerHTML=`
+      <p class="note">Einmal pro Gerät einrichten. Deine Daten landen in einem <b>privaten Gist</b> in deinem eigenen GitHub-Konto.</p>
+      <ol>
+        <li>Öffne <a href="https://github.com/settings/tokens/new?scopes=gist&description=Gameplan" target="_blank" rel="noopener">github.com → neuer Token</a> (ist vorausgefüllt).</li>
+        <li>Nur den Haken bei <code>gist</code> lassen, unten auf <b>Generate token</b>.</li>
+        <li>Token kopieren und hier einfügen:</li>
+      </ol>
+      <div class="field"><input type="password" id="tokenInput" placeholder="ghp_… hier einfügen" autocomplete="off"></div>
+      <button class="btn primary" id="syncConnect" style="width:100%">Verbinden</button>
+      <p class="note" style="margin-top:14px">Der Token bleibt nur in diesem Browser gespeichert. Er hat ausschließlich Zugriff auf Gists – mehr nicht.</p>`;
+    body.querySelector("#syncConnect").onclick=async()=>{
+      const t=body.querySelector("#tokenInput").value.trim();
+      if(!t){ alert("Bitte Token einfügen."); return; }
+      const btn=body.querySelector("#syncConnect"); btn.textContent="Verbinde…"; btn.disabled=true;
+      try{ await connect(t); render(); renderSyncBody(); }
+      catch(err){ alert("Verbindung fehlgeschlagen: "+(err.status===401?"Token ungültig.":err.message)); setSyncStatus("error"); btn.textContent="Verbinden"; btn.disabled=false; }
+    };
+    body.querySelector("#tokenInput").addEventListener("keydown",e=>{ if(e.key==="Enter") body.querySelector("#syncConnect").click(); });
+  }
+}
+
+// refresh from cloud when returning to the app
+window.addEventListener("focus",()=>{
+  if(isConnected() && Date.now()-lastFocusPull>4000){ lastFocusPull=Date.now(); pull(); }
+});
+
+render();
+setSyncStatus(isConnected()?"ok":null);
+if(isConnected()) pull();
+</script>
+</body>
+</html>
