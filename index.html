@@ -250,6 +250,10 @@
       <input type="number" id="rTarget" min="1" max="14" value="3">
     </div>
     <div class="field">
+      <label>Startdatum (ab wann zählt die Routine?)</label>
+      <input type="date" id="rStart">
+    </div>
+    <div class="field">
       <label>Farbe</label>
       <div class="colors" id="colorPicker"></div>
     </div>
@@ -526,6 +530,7 @@ function openEdit(id){
   document.getElementById("editTitle").textContent=r?"Routine bearbeiten":"Neue Routine";
   document.getElementById("rName").value=r?r.name:"";
   document.getElementById("rTarget").value=r?r.target:3;
+  document.getElementById("rStart").value=r?r.created:todayStr();
   pickedColor=r?r.color:PALETTE[state.routines.length%PALETTE.length];
   buildColorPicker(); markColor();
   editOverlay.classList.add("show"); document.getElementById("rName").focus();
@@ -535,9 +540,10 @@ editOverlay.onclick=e=>{ if(e.target===editOverlay) editOverlay.classList.remove
 document.getElementById("saveEdit").onclick=()=>{
   const name=document.getElementById("rName").value.trim();
   const target=Math.max(1,Math.min(14,parseInt(document.getElementById("rTarget").value)||1));
+  const start=document.getElementById("rStart").value || todayStr();
   if(!name){ alert("Bitte einen Namen eingeben."); return; }
-  if(editingId){ const r=state.routines.find(x=>x.id===editingId); r.name=name; r.target=target; r.color=pickedColor; }
-  else state.routines.push({id:uid(),name,target,color:pickedColor,created:todayStr()});
+  if(editingId){ const r=state.routines.find(x=>x.id===editingId); r.name=name; r.target=target; r.color=pickedColor; r.created=start; }
+  else state.routines.push({id:uid(),name,target,color:pickedColor,created:start});
   save(); editOverlay.classList.remove("show"); renderManage(); render();
 };
 document.getElementById("rName").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("saveEdit").click(); });
