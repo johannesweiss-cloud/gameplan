@@ -130,6 +130,14 @@
   .synced-box{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:14px; font-size:13.5px; margin-bottom:16px}
   .synced-box b{color:var(--good)}
 
+  /* milestones / Belohnungen */
+  .badges{display:flex; gap:6px; flex-wrap:wrap; margin-top:10px}
+  .badge{display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:3px 8px; border-radius:20px; background:rgba(59,109,255,.10); color:var(--accent)}
+  .badge.gold{background:rgba(234,179,8,.16); color:#a16207}
+  .ms-modal{max-width:380px; text-align:center}
+  .ms-icon{font-size:54px; line-height:1; margin-bottom:8px}
+  .ms-msg{font-size:14.5px; color:var(--text); margin:0 0 6px}
+
   /* heatmap */
   .hm-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:4px}
   .hm-grid{display:flex; gap:3px}
@@ -143,6 +151,19 @@
   .hm-cell.lvl-1{background:#f4f6f9}
   .hm-legend{display:flex; align-items:center; gap:6px; justify-content:flex-end; margin-top:12px; font-size:11px; color:var(--muted)}
   .hm-legend .hm-cell{width:11px; height:11px}
+
+  /* experiments */
+  .cell.disabled{opacity:.18; cursor:not-allowed; background:#eaedf2}
+  .cell.disabled::after{content:""; display:none}
+  .exp-meta{font-size:11px; color:var(--muted); margin-top:2px; font-weight:normal}
+  .archive-list{display:flex; flex-direction:column; gap:12px}
+  .archive-item{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:8px}
+  .archive-header{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px}
+  .archive-title{font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px}
+  .archive-note{font-size:13.5px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:4px 0 0; color:var(--text); white-space:pre-wrap; line-height:1.4}
+  .eval-result{font-size:11px; font-weight:700; padding:3px 8px; border-radius:20px; text-transform:uppercase}
+  .eval-result.success{background:rgba(28,166,114,.13); color:var(--good)}
+  .eval-result.fail{background:rgba(229,72,77,.10); color:var(--bad)}
 
   #confettiCanvas{position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:60; display:none}
 
@@ -163,6 +184,7 @@
     <div class="toolbar">
       <button class="btn sync-pill" id="syncBtn"><span class="dotled" id="syncDot"></span><span id="syncText">Sync einrichten</span></button>
       <button class="btn" id="manageBtn">Routinen</button>
+      <button class="btn" id="experimentsBtn">Experimente</button>
       <button class="btn" id="exportBtn">Export</button>
       <button class="btn" id="importBtn">Import</button>
       <input type="file" id="importFile" accept="application/json" style="display:none">
@@ -180,6 +202,12 @@
       <button class="nav-btn" id="nextWeek">›</button>
     </div>
     <div class="gridscroll"><div id="weekGrid"></div></div>
+  </div>
+
+  <!-- ACTIVE EXPERIMENTS -->
+  <div class="card" id="activeExpCard" style="display:none">
+    <h2>Aktive Experimente</h2>
+    <div class="gridscroll"><div id="activeExpGrid"></div></div>
   </div>
 
   <!-- STATS -->
@@ -207,6 +235,12 @@
       <span class="hm-cell lvl4"></span>
       mehr
     </div>
+  </div>
+
+  <!-- ARCHIVED EXPERIMENTS -->
+  <div class="card" id="archivedExpCard" style="display:none">
+    <h2>Erfolgreiche & Beendete Experimente</h2>
+    <div class="archive-list" id="archivedExpList"></div>
   </div>
 </div>
 
@@ -264,6 +298,89 @@
   </div>
 </div>
 
+<!-- MILESTONE MODAL -->
+<div class="overlay" id="milestoneOverlay">
+  <div class="modal ms-modal">
+    <div class="ms-icon" id="msIcon">🌱</div>
+    <h3 id="msTitle">Meilenstein</h3>
+    <p class="ms-msg" id="msMsg"></p>
+    <div class="modal-actions" style="justify-content:center">
+      <button class="btn primary" id="msClose">Weiter so! 🎉</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPERIMENT MANAGE MODAL -->
+<div class="overlay" id="expManageOverlay">
+  <div class="modal">
+    <h3>Experimente verwalten</h3>
+    <div class="routine-list" id="expManageList"></div>
+    <button class="link" id="addExpBtn">+ Neues Experiment</button>
+    <div class="modal-actions">
+      <span></span>
+      <button class="btn primary" id="closeExpManage">Fertig</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPERIMENT EDIT MODAL -->
+<div class="overlay" id="expEditOverlay">
+  <div class="modal">
+    <h3 id="expEditTitle">Neues Experiment</h3>
+    <div class="field">
+      <label>Name des Experiments</label>
+      <input type="text" id="expName" placeholder="z.B. 7 Tage kein Social Media, 2x/Woche joggen …">
+    </div>
+    <div class="field">
+      <label>Dauer (Wochen)</label>
+      <input type="number" id="expDuration" min="1" max="12" value="1">
+    </div>
+    <div class="field">
+      <label>Häufigkeit</label>
+      <div style="display:flex; gap:16px; margin-top:6px; font-size:14px; margin-bottom: 12px;">
+        <label style="display:inline-flex; align-items:center; gap:6px; font-weight:normal; text-transform:none; cursor:pointer">
+          <input type="radio" name="expFreqType" value="daily" checked style="width:auto; margin:0"> Jeden Tag
+        </label>
+        <label style="display:inline-flex; align-items:center; gap:6px; font-weight:normal; text-transform:none; cursor:pointer">
+          <input type="radio" name="expFreqType" value="weekly" style="width:auto; margin:0"> X-mal pro Woche
+        </label>
+      </div>
+    </div>
+    <div class="field" id="expTargetField" style="display:none">
+      <label>Wie oft pro Woche?</label>
+      <input type="number" id="expTarget" min="1" max="7" value="3">
+    </div>
+    <div class="field">
+      <label>Startdatum</label>
+      <input type="date" id="expStart">
+    </div>
+    <div class="field">
+      <label>Farbe</label>
+      <div class="colors" id="expColorPicker"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="cancelExpEdit">Abbrechen</button>
+      <button class="btn primary" id="saveExpEdit">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPERIMENT EVALUATE MODAL -->
+<div class="overlay" id="expEvalOverlay">
+  <div class="modal">
+    <h3>Experiment beendet!</h3>
+    <h2 id="expEvalName" style="font-size:18px; text-transform:none; letter-spacing:normal; margin:0 0 12px; color:var(--text)">Experiment Name</h2>
+    <div id="expEvalResultBox" style="margin-bottom:16px"></div>
+    <div class="field">
+      <label>Persönliche Auswertung / Notiz</label>
+      <textarea id="expEvalNote" rows="4" style="width:100%; background:var(--panel); border:1px solid var(--line); color:var(--text); padding:10px 12px; border-radius:9px; font-size:14px; font-family:inherit; resize:vertical" placeholder="Wie lief das Experiment? Was hast du gelernt? Hat es dir gutgetan?"></textarea>
+    </div>
+    <div class="modal-actions" style="justify-content:center">
+      <button class="btn primary" id="saveExpEval">Speichern & Archivieren 🎉</button>
+    </div>
+  </div>
+</div>
+
 <script>
 "use strict";
 const PALETTE = ["#3b6dff","#1ca672","#ff8f3b","#a855f7","#eab308","#06b6d4","#ec4899","#65a30d"];
@@ -276,15 +393,20 @@ let editingId = null;
 let pickedColor = PALETTE[0];
 
 function load(){
-  try{ const raw=localStorage.getItem(STORE_KEY); if(raw) return JSON.parse(raw); }catch(e){}
-  return {
-    updatedAt:0,
-    routines:[
-      {id:uid(), name:"Physio", target:3, color:PALETTE[0], created:todayStr()},
-      {id:uid(), name:"Laufen", target:1, color:PALETTE[1], created:todayStr()},
-    ],
-    logs:{}
-  };
+  let s = null;
+  try{ const raw=localStorage.getItem(STORE_KEY); if(raw) s = JSON.parse(raw); }catch(e){}
+  if(!s){
+    s = {
+      updatedAt:0,
+      routines:[
+        {id:uid(), name:"Physio", target:3, color:PALETTE[0], created:todayStr()},
+        {id:uid(), name:"Laufen", target:1, color:PALETTE[1], created:todayStr()},
+      ],
+      logs:{}
+    };
+  }
+  if(!s.experiments) s.experiments = [];
+  return s;
 }
 function persist(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
 function save(){ state.updatedAt=Date.now(); persist(); schedulePush(); }
@@ -331,11 +453,498 @@ function recordStreak(r){
   return best;
 }
 
+// ---------- milestones (Belohnungen) ----------
+const MILESTONES = [
+  { days:21, icon:"🌱", gold:false,
+    title:"21 Tage am Ball! 🌱",
+    msg:n=>`Du ziehst „${n}" jetzt schon <b>21 Tage am Stück</b> durch, ohne dein Wochenziel zu verpassen. Die Gewohnheit nimmt Form an – bleib dran!` },
+  { days:66, icon:"🏆", gold:true,
+    title:"66 Tage – gefestigt! 🏆",
+    msg:n=>`<b>66 Tage „${n}"!</b> So lange ohne Aussetzer – jetzt ist die Gewohnheit wirklich verankert. Riesen-Respekt, das ist echte Disziplin.` },
+];
+
+// Kalendertage, die die Routine ohne verpasstes Wochenziel am Stück läuft.
+function streakDays(r){
+  const created=parse(r.created); created.setHours(0,0,0,0);
+  const createdMon=getMonday(created);
+  let earliest=null;
+  for(let off=0; off<3000; off++){
+    const mon=getMonday(addDays(new Date(),-off*7));
+    if(mon<createdMon) break;
+    const met=countInWeek(r.id,mon)>=r.target;
+    if(off===0){ if(met) earliest=mon; continue; }   // laufende Woche darf noch offen sein
+    if(met) earliest=mon; else break;
+  }
+  if(earliest===null) return 0;
+  const start=earliest.getTime()>created.getTime()?earliest:created;
+  const today=new Date(); today.setHours(0,0,0,0);
+  return Math.max(0, Math.round((today-start)/864e5)+1);
+}
+
+let milestoneQueue=[], milestoneShowing=false;
+function checkMilestones(){
+  let realAward=false, localOnly=false;
+  state.routines.forEach(r=>{
+    if(!Array.isArray(r.awarded)) r.awarded=[];
+    const first = r.msReady!==true;     // Routine zum ersten Mal mit diesem Feature bewertet
+    const days = streakDays(r);
+    MILESTONES.forEach(m=>{
+      if(r.awarded.includes(m.days)) return;
+      if(days>=m.days){
+        r.awarded.push(m.days);
+        if(first) localOnly=true;                                  // rückwirkend, still vergeben
+        else { realAward=true; milestoneQueue.push({name:r.name,color:r.color,m}); }
+      }
+    });
+    if(first){ r.msReady=true; localOnly=true; }
+  });
+  if(realAward){ save(); renderStats(); }   // echte Auszeichnung: syncen + Badge sofort zeigen
+  else if(localOnly){ persist(); }          // stilles Backfill nur lokal (kein updatedAt-Bump!)
+  if(milestoneQueue.length && !milestoneShowing) showNextMilestone();
+}
+function showNextMilestone(){
+  if(!milestoneQueue.length){ milestoneShowing=false; return; }
+  milestoneShowing=true;
+  const {name,color,m}=milestoneQueue.shift();
+  document.getElementById("msIcon").textContent=m.icon;
+  document.getElementById("msTitle").textContent=m.title;
+  document.getElementById("msMsg").innerHTML=m.msg(escapeHtml(name));
+  document.getElementById("milestoneOverlay").classList.add("show");
+  launchConfetti(color);
+}
+function closeMilestone(){
+  document.getElementById("milestoneOverlay").classList.remove("show");
+  milestoneShowing=false;
+  if(milestoneQueue.length) setTimeout(showNextMilestone,350);
+}
+document.getElementById("msClose").onclick=closeMilestone;
+document.getElementById("milestoneOverlay").onclick=e=>{ if(e.target.id==="milestoneOverlay") closeMilestone(); };
+
+// ---------- experiments ----------
+
+// Returns the active start and end Date objects for an experiment.
+function getExperimentDates(exp){
+  const start = parse(exp.startDate);
+  start.setHours(0,0,0,0);
+  let end;
+  if(exp.frequencyType === "daily"){
+    end = addDays(start, exp.durationWeeks * 7 - 1);
+  } else {
+    const startMon = getMonday(start);
+    end = addDays(startMon, exp.durationWeeks * 7 - 1);
+  }
+  end.setHours(0,0,0,0);
+  return { start, end };
+}
+
+// Calculates progress and success state.
+function getExperimentProgress(exp){
+  const { start, end } = getExperimentDates(exp);
+  const endStr = fmt(end);
+  
+  if(exp.frequencyType === "daily"){
+    const totalDays = exp.durationWeeks * 7;
+    let done = 0;
+    for(let i=0; i<totalDays; i++){
+      const ds = fmt(addDays(start, i));
+      if(isDone(exp.id, ds)) done++;
+    }
+    const isSuccess = done === totalDays;
+    return {
+      done,
+      target: totalDays,
+      isSuccess,
+      details: `${done} von ${totalDays} Tagen erledigt`
+    };
+  } else {
+    const totalWeeks = exp.durationWeeks;
+    const startMon = getMonday(start);
+    let completedWeeks = 0;
+    let isSuccess = true;
+    
+    for(let w=0; w<totalWeeks; w++){
+      const mon = addDays(startMon, w * 7);
+      const count = weekDates(mon).reduce((n, ds)=>{
+        return n + (ds >= exp.startDate && ds <= endStr && isDone(exp.id, ds) ? 1 : 0);
+      }, 0);
+      
+      const met = count >= exp.target;
+      if(met) completedWeeks++;
+      
+      const monToday = getMonday(new Date());
+      if(mon < monToday && !met) {
+        isSuccess = false;
+      }
+    }
+    
+    const currentWeekMon = getMonday(new Date());
+    const currentWeekDone = weekDates(currentWeekMon).reduce((n, ds)=>{
+      return n + (ds >= exp.startDate && ds <= endStr && isDone(exp.id, ds) ? 1 : 0);
+    }, 0);
+    
+    return {
+      done: completedWeeks,
+      target: totalWeeks,
+      isSuccess: isSuccess && (completedWeeks === totalWeeks),
+      details: `Woche ${completedWeeks}/${totalWeeks} bestanden (Diese Woche: ${currentWeekDone}/${exp.target})`
+    };
+  }
+}
+
+let evalQueue = [], evalShowing = false;
+function checkExperiments(){
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  
+  state.experiments.forEach(exp => {
+    if(exp.status !== "active") return;
+    const { end } = getExperimentDates(exp);
+    if(today > end){
+      if(!evalQueue.some(q => q.exp.id === exp.id)){
+        const prog = getExperimentProgress(exp);
+        evalQueue.push({ exp, prog });
+      }
+    }
+  });
+  
+  if(evalQueue.length && !evalShowing) showNextEvaluation();
+}
+
+function showNextEvaluation(){
+  if(!evalQueue.length){ evalShowing = false; return; }
+  evalShowing = true;
+  const { exp, prog } = evalQueue.shift();
+  
+  document.getElementById("expEvalName").textContent = exp.name;
+  document.getElementById("expEvalName").style.color = exp.color;
+  
+  const resultBox = document.getElementById("expEvalResultBox");
+  if(prog.isSuccess){
+    resultBox.innerHTML = `<span class="eval-result success">Geschafft! 🎉</span>
+      <p style="margin:8px 0 0; font-size:14px; color:var(--text)"><b>Herausragend!</b> Du hast dein Ziel zu 100% erreicht (${prog.details}).</p>`;
+  } else {
+    resultBox.innerHTML = `<span class="eval-result fail">Beendet</span>
+      <p style="margin:8px 0 0; font-size:14px; color:var(--text)">Das Experiment ist beendet. Du hast das Ziel nicht ganz zu 100% erreicht (${prog.details}), aber jeder Versuch ist wertvoll!</p>`;
+  }
+  
+  document.getElementById("expEvalNote").value = "";
+  document.getElementById("expEvalOverlay").classList.add("show");
+  
+  if(prog.isSuccess){
+    launchConfetti(exp.color);
+  }
+  
+  document.getElementById("saveExpEval").onclick = () => {
+    const note = document.getElementById("expEvalNote").value.trim();
+    const targetExp = state.experiments.find(x => x.id === exp.id);
+    if(targetExp){
+      targetExp.status = "ended";
+      targetExp.evaluation = prog.isSuccess ? "success" : "fail";
+      targetExp.note = note;
+      save();
+    }
+    document.getElementById("expEvalOverlay").classList.remove("show");
+    evalShowing = false;
+    render();
+  };
+}
+
+function renderActiveExperiments(){
+  const host = document.getElementById("activeExpGrid");
+  const card = document.getElementById("activeExpCard");
+  const activeExps = state.experiments.filter(x => x.status === "active");
+  
+  if(activeExps.length === 0){
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "block";
+  
+  const monday = getMonday(addDays(new Date(), weekOffset * 7));
+  const dates = weekDates(monday);
+  const tStr = todayStr();
+  const sunday = addDays(monday, 6);
+  
+  let html = `<table class="grid"><thead><tr><th class="namecol"></th>`;
+  dates.forEach((ds, i) => {
+    html += `<th class="daydate">${DAYS[i]}<b>${parse(ds).getDate()}.</b></th>`;
+  });
+  html += `<th></th></tr></thead><tbody>`;
+  
+  activeExps.forEach(exp => {
+    const { start, end } = getExperimentDates(exp);
+    const endStr = fmt(end);
+    const prog = getExperimentProgress(exp);
+    
+    const doneInWeek = weekDates(monday).reduce((n, ds) => {
+      return n + (ds >= exp.startDate && ds <= endStr && isDone(exp.id, ds) ? 1 : 0);
+    }, 0);
+    
+    const isWeekly = exp.frequencyType === "weekly";
+    const targetText = isWeekly ? `${exp.target}× / Wo.` : "Täglich";
+    const progressText = prog.details;
+    
+    html += `<tr><td class="name">${escapeHtml(exp.name)}
+      <div class="exp-meta"><span class="swatch" style="background:${exp.color}; display:inline-block; vertical-align:middle; margin-right:4px"></span>Laufzeit: ${fmtShort(start)}–${fmtShort(end)} · ${targetText}</div>
+      <div class="exp-meta" style="color:var(--accent); font-weight:600">${progressText}</div>
+    </td>`;
+    
+    dates.forEach(ds => {
+      const outside = ds < exp.startDate || ds > endStr;
+      const future = ds > tStr;
+      const on = !outside && isDone(exp.id, ds);
+      
+      const cls = ["cell"];
+      if(on) cls.push("on");
+      if(outside) cls.push("disabled");
+      else if(future) cls.push("future");
+      if(ds === tStr) cls.push("today-mark");
+      
+      const style = on ? `style="background:${exp.color}"` : "";
+      
+      html += `<td><div class="${cls.join(" ")}" ${style} data-eid="${exp.id}" data-date="${ds}" data-outside="${outside}" data-future="${future}"></div></td>`;
+    });
+    
+    let statusHtml = "";
+    if(isWeekly){
+      const met = doneInWeek >= exp.target;
+      statusHtml = `<span class="status ${met ? "met" : "miss"}">${doneInWeek}/${exp.target}</span>`;
+    } else {
+      const activeDaysInWeek = weekDates(monday).reduce((n, ds) => {
+        return n + (ds >= exp.startDate && ds <= endStr ? 1 : 0);
+      }, 0);
+      statusHtml = `<span class="status ${doneInWeek === activeDaysInWeek ? "met" : "miss"}">${doneInWeek}/${activeDaysInWeek}</span>`;
+    }
+    
+    html += `<td>${statusHtml}</td></tr>`;
+  });
+  
+  html += `</tbody></table>`;
+  host.innerHTML = html;
+  
+  host.querySelectorAll(".cell").forEach(c => {
+    if(c.dataset.outside === "true" || c.dataset.future === "true") return;
+    c.addEventListener("click", () => {
+      const eid = c.dataset.eid;
+      const exp = state.experiments.find(x => x.id === eid);
+      const isWeekly = exp.frequencyType === "weekly";
+      
+      const wkMon = getMonday(addDays(new Date(), weekOffset * 7));
+      const endStr = fmt(getExperimentDates(exp).end);
+      const beforeCount = weekDates(wkMon).reduce((n, ds) => {
+        return n + (ds >= exp.startDate && ds <= endStr && isDone(eid, ds) ? 1 : 0);
+      }, 0);
+      
+      const wasMet = isWeekly ? (beforeCount >= exp.target) : false;
+      
+      toggle(eid, c.dataset.date);
+      
+      const afterCount = weekDates(wkMon).reduce((n, ds) => {
+        return n + (ds >= exp.startDate && ds <= endStr && isDone(eid, ds) ? 1 : 0);
+      }, 0);
+      
+      const isMetNow = isWeekly ? (afterCount >= exp.target) : (isDone(eid, c.dataset.date));
+      
+      if(isWeekly) {
+        if(!wasMet && isMetNow) launchConfetti(exp.color);
+      } else {
+        if(isMetNow) launchConfetti(exp.color);
+      }
+      
+      render();
+    });
+  });
+}
+
+function renderArchivedExperiments(){
+  const host = document.getElementById("archivedExpList");
+  const card = document.getElementById("archivedExpCard");
+  const endedExps = state.experiments.filter(x => x.status === "ended");
+  
+  if(endedExps.length === 0){
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "block";
+  
+  host.innerHTML = endedExps.map(exp => {
+    const success = exp.evaluation === "success";
+    const { start, end } = getExperimentDates(exp);
+    const targetText = exp.frequencyType === "weekly" ? `${exp.target}× / Wo.` : "Täglich";
+    
+    return `
+      <div class="archive-item">
+        <div class="archive-header">
+          <div class="archive-title">
+            <span class="swatch" style="background:${exp.color}"></span>
+            ${escapeHtml(exp.name)}
+          </div>
+          <span class="eval-result ${success ? "success" : "fail"}">${success ? "Geschafft 🎉" : "Beendet"}</span>
+        </div>
+        <div class="exp-meta" style="margin: -2px 0 6px">
+          Laufzeit: ${fmtShort(start)}–${fmtShort(end)} (${exp.durationWeeks} ${exp.durationWeeks === 1 ? "Woche" : "Wochen"}) · Häufigkeit: ${targetText}
+        </div>
+        ${exp.note ? `<div class="archive-note"><b>Meine Notiz:</b><br>${escapeHtml(exp.note)}</div>` : ""}
+        <div style="display:flex; justify-content:flex-end; margin-top:4px">
+          <button class="link" data-del-exp="${exp.id}" style="color:var(--bad)">Löschen</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+  
+  host.querySelectorAll("[data-del-exp]").forEach(b => {
+    b.onclick = () => {
+      const eid = b.dataset.delExp;
+      const exp = state.experiments.find(x => x.id === eid);
+      if(confirm(`Experiment „${exp.name}" wirklich aus dem Archiv löschen?`)){
+        state.experiments = state.experiments.filter(x => x.id !== eid);
+        delete state.logs[eid];
+        save();
+        render();
+      }
+    };
+  });
+}
+
+// ---------- experiments UI ----------
+const expManageOverlay = document.getElementById("expManageOverlay");
+const expEditOverlay = document.getElementById("expEditOverlay");
+
+document.getElementById("experimentsBtn").onclick = () => {
+  renderExpManage();
+  expManageOverlay.classList.add("show");
+};
+
+document.getElementById("closeExpManage").onclick = () => expManageOverlay.classList.remove("show");
+expManageOverlay.onclick = e => { if(e.target === expManageOverlay) expManageOverlay.classList.remove("show"); };
+
+function renderExpManage(){
+  const list = document.getElementById("expManageList");
+  const activeExps = state.experiments.filter(x => x.status === "active");
+  
+  if(activeExps.length === 0){
+    list.innerHTML = `<div class="empty" style="padding:10px">Keine aktiven Experimente.</div>`;
+    return;
+  }
+  
+  list.innerHTML = activeExps.map(exp => `
+    <div class="rl-item">
+      <span class="swatch" style="background:${exp.color}"></span>
+      <span class="nm">${escapeHtml(exp.name)}</span>
+      <span class="tg">${exp.frequencyType === "weekly" ? exp.target + "×/Wo." : "Täglich"}</span>
+      <button class="link" data-edit-exp="${exp.id}">bearbeiten</button>
+      <button class="x" data-del-exp-active="${exp.id}" title="Löschen">×</button>
+    </div>`).join("");
+    
+  list.querySelectorAll("[data-del-exp-active]").forEach(b => b.onclick = () => {
+    const eid = b.dataset.delExpActive;
+    const exp = state.experiments.find(x => x.id === eid);
+    if(confirm(`Experiment „${exp.name}" wirklich löschen? Alle erfassten Daten gehen verloren.`)){
+      state.experiments = state.experiments.filter(x => x.id !== eid);
+      delete state.logs[eid];
+      save();
+      renderExpManage();
+      render();
+    }
+  });
+  
+  list.querySelectorAll("[data-edit-exp]").forEach(b => b.onclick = () => openExpEdit(b.dataset.editExp));
+}
+
+document.querySelectorAll('input[name="expFreqType"]').forEach(r => {
+  r.addEventListener("change", e => {
+    document.getElementById("expTargetField").style.display = e.target.value === "weekly" ? "block" : "none";
+  });
+});
+
+let pickedExpColor = PALETTE[0];
+function buildExpColorPicker(){
+  const host = document.getElementById("expColorPicker");
+  host.innerHTML = PALETTE.map(c => `<button data-c="${c}" style="background:${c}"></button>`).join("");
+  host.querySelectorAll("button").forEach(b => b.onclick = () => { pickedExpColor = b.dataset.c; markExpColor(); });
+}
+function markExpColor(){
+  document.querySelectorAll("#expColorPicker button").forEach(b => b.classList.toggle("sel", b.dataset.c === pickedExpColor));
+}
+
+document.getElementById("addExpBtn").onclick = () => openExpEdit(null);
+
+let editingExpId = null;
+function openExpEdit(id){
+  editingExpId = id;
+  const exp = id ? state.experiments.find(x => x.id === id) : null;
+  
+  document.getElementById("expEditTitle").textContent = exp ? "Experiment bearbeiten" : "Neues Experiment";
+  document.getElementById("expName").value = exp ? exp.name : "";
+  document.getElementById("expDuration").value = exp ? exp.durationWeeks : 1;
+  
+  const freqType = exp ? exp.frequencyType : "daily";
+  document.querySelector(`input[name="expFreqType"][value="${freqType}"]`).checked = true;
+  document.getElementById("expTargetField").style.display = freqType === "weekly" ? "block" : "none";
+  document.getElementById("expTarget").value = exp ? exp.target : 3;
+  document.getElementById("expStart").value = exp ? exp.startDate : todayStr();
+  
+  pickedExpColor = exp ? exp.color : PALETTE[state.experiments.length % PALETTE.length];
+  buildExpColorPicker();
+  markExpColor();
+  
+  expEditOverlay.classList.add("show");
+  document.getElementById("expName").focus();
+}
+
+document.getElementById("cancelExpEdit").onclick = () => expEditOverlay.classList.remove("show");
+expEditOverlay.onclick = e => { if(e.target === expEditOverlay) expEditOverlay.classList.remove("show"); };
+
+document.getElementById("saveExpEdit").onclick = () => {
+  const name = document.getElementById("expName").value.trim();
+  const duration = Math.max(1, Math.min(12, parseInt(document.getElementById("expDuration").value) || 1));
+  const freqType = document.querySelector('input[name="expFreqType"]:checked').value;
+  const target = freqType === "daily" ? 7 : Math.max(1, Math.min(7, parseInt(document.getElementById("expTarget").value) || 1));
+  const start = document.getElementById("expStart").value || todayStr();
+  
+  if(!name){ alert("Bitte einen Namen eingeben."); return; }
+  
+  if(editingExpId){
+    const exp = state.experiments.find(x => x.id === editingExpId);
+    exp.name = name;
+    exp.durationWeeks = duration;
+    exp.frequencyType = freqType;
+    exp.target = target;
+    exp.startDate = start;
+    exp.color = pickedExpColor;
+  } else {
+    state.experiments.push({
+      id: uid(),
+      name,
+      durationWeeks: duration,
+      frequencyType: freqType,
+      target,
+      startDate: start,
+      color: pickedExpColor,
+      status: "active",
+      evaluation: null,
+      note: "",
+      created: todayStr()
+    });
+  }
+  
+  save();
+  expEditOverlay.classList.remove("show");
+  renderExpManage();
+  render();
+};
+
+document.getElementById("expName").addEventListener("keydown", e => {
+  if(e.key === "Enter") document.getElementById("saveExpEdit").click();
+});
+
 // ---------- render ----------
 function render(){
   document.getElementById("todayLabel").textContent =
     new Date().toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   renderSummary(); renderWeek(); renderStats(); renderHistory(); renderHeatmap();
+  renderActiveExperiments(); renderArchivedExperiments();
+  checkMilestones(); checkExperiments();
 }
 
 function renderHeatmap(){
@@ -453,6 +1062,14 @@ function renderStats(){
     let l4done=0,l4plan=0;
     for(let i=0;i<4;i++){ const mon=getMonday(addDays(new Date(),-i*7)); if(mon>=getMonday(parse(r.created))){ l4done+=countInWeek(r.id,mon); l4plan+=r.target; } }
     const l4=l4plan?Math.round(l4done/l4plan*100):0;
+    const days=streakDays(r);
+    const goalTxt = days<21 ? `noch ${21-days} Tg. bis 🌱`
+                  : days<66 ? `noch ${66-days} Tg. bis 🏆`
+                  : `alle Meilensteine ✓`;
+    const badges=(r.awarded||[]).slice().sort((a,b)=>a-b).map(d=>{
+      const m=MILESTONES.find(x=>x.days===d);
+      return m?`<span class="badge${m.gold?" gold":""}">${m.icon} ${d} Tage</span>`:"";
+    }).join("");
     return `
       <div class="stat">
         <div class="label"><span class="swatch" style="background:${r.color}"></span>${escapeHtml(r.name)}</div>
@@ -460,6 +1077,8 @@ function renderStats(){
         <div class="bar"><div style="width:${Math.min(100,quote)}%;background:${r.color}"></div></div>
         <div class="sub"><span><b>${doneTotal}</b>/${planned} Einheiten</span><span>letzte 4 Wo.: <b>${l4}%</b></span></div>
         <div class="sub" style="margin-top:6px"><span>🔥 Streak: <b>${currentStreak(r)}</b></span><span>Rekord: <b>${recordStreak(r)}</b> Wo.</span></div>
+        <div class="sub" style="margin-top:6px"><span>📆 <b>${days}</b> Tage am Ball</span><span>${goalTxt}</span></div>
+        ${badges?`<div class="badges">${badges}</div>`:""}
       </div>`;
   }).join("");
 }
