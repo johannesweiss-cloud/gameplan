@@ -408,7 +408,16 @@ function load(){
   if(!s.experiments) s.experiments = [];
   return s;
 }
-function persist(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+function sanitizeState(){
+  if(!state) return;
+  if(!state.experiments) state.experiments = [];
+  if(!state.routines) state.routines = [];
+  if(!state.logs) state.logs = {};
+  state.routines.forEach(r => {
+    if(!Array.isArray(r.awarded)) r.awarded = [];
+  });
+}
+function persist(){ sanitizeState(); localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
 function save(){ state.updatedAt=Date.now(); persist(); schedulePush(); }
 function uid(){ return Math.random().toString(36).slice(2,9); }
 
@@ -940,6 +949,7 @@ document.getElementById("expName").addEventListener("keydown", e => {
 
 // ---------- render ----------
 function render(){
+  sanitizeState();
   document.getElementById("todayLabel").textContent =
     new Date().toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   renderSummary(); renderWeek(); renderStats(); renderHistory(); renderHeatmap();
@@ -1266,6 +1276,7 @@ async function pull(){
     }else{ await push(); }
     setSyncStatus("ok");
   }catch(err){
+    console.error("Sync pull error:", err);
     setSyncStatus(err.status===401?"error":"offline", err.status===401?"Token ungültig":"Offline");
   }finally{ pulling=false; }
 }
@@ -1284,6 +1295,7 @@ async function push(){
       {files:{[GIST_FILE]:{content:JSON.stringify(state)}}});
     setSyncStatus("ok");
   }catch(err){
+    console.error("Sync push error:", err);
     setSyncStatus(err.status===401?"error":"offline", err.status===401?"Token ungültig":"Offline");
   }
 }
