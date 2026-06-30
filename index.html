@@ -237,6 +237,12 @@
     </div>
   </div>
 
+  <!-- COMPLETED ROUTINES -->
+  <div class="card" id="completedRoutinesCard" style="display:none">
+    <h2>Abgeschlossene Routinen</h2>
+    <div class="archive-list" id="completedRoutinesList"></div>
+  </div>
+
   <!-- ARCHIVED EXPERIMENTS -->
   <div class="card" id="archivedExpCard" style="display:none">
     <h2>Erfolgreiche & Beendete Experimente</h2>
@@ -439,13 +445,15 @@ function toggle(rid,ds){
 }
 function countInWeek(rid,monday){ return weekDates(monday).reduce((n,ds)=>n+(isDone(rid,ds)?1:0),0); }
 function weeksSinceStart(r){
-  const diff=Math.round((getMonday(new Date())-getMonday(parse(r.created)))/(7*864e5));
+  const end = r.completedAt ? parse(r.completedAt) : new Date();
+  const diff=Math.round((getMonday(end)-getMonday(parse(r.created)))/(7*864e5));
   return Math.max(1, diff+1);
 }
 function currentStreak(r){
   let s=0;
+  const refDate = r.completedAt ? parse(r.completedAt) : new Date();
   for(let off=0; off<400; off++){
-    const mon=getMonday(addDays(new Date(),-off*7));
+    const mon=getMonday(addDays(refDate,-off*7));
     if(mon<getMonday(parse(r.created))) break;
     const met=countInWeek(r.id,mon)>=r.target;
     if(off===0 && !met) continue;        // current week still running
@@ -477,8 +485,9 @@ function streakDays(r){
   const created=parse(r.created); created.setHours(0,0,0,0);
   const createdMon=getMonday(created);
   let earliest=null;
+  const refDate = r.completedAt ? parse(r.completedAt) : new Date();
   for(let off=0; off<3000; off++){
-    const mon=getMonday(addDays(new Date(),-off*7));
+    const mon=getMonday(addDays(refDate,-off*7));
     if(mon<createdMon) break;
     const met=countInWeek(r.id,mon)>=r.target;
     if(off===0){ if(met) earliest=mon; continue; }   // laufende Woche darf noch offen sein
@@ -486,14 +495,14 @@ function streakDays(r){
   }
   if(earliest===null) return 0;
   const start=earliest.getTime()>created.getTime()?earliest:created;
-  const today=new Date(); today.setHours(0,0,0,0);
+  const today=new Date(refDate); today.setHours(0,0,0,0);
   return Math.max(0, Math.round((today-start)/864e5)+1);
 }
 
 let milestoneQueue=[], milestoneShowing=false;
 function checkMilestones(){
   let realAward=false, localOnly=false;
-  state.routines.forEach(r=>{
+  state.routines.filter(r=>!r.completed).forEach(r=>{
     if(!Array.isArray(r.awarded)) r.awarded=[];
     const first = r.msReady!==true;     // Routine zum ersten Mal mit diesem Feature bewertet
     const days = streakDays(r);
@@ -953,7 +962,7 @@ function render(){
   document.getElementById("todayLabel").textContent =
     new Date().toLocaleDateString("de-DE",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   renderSummary(); renderWeek(); renderStats(); renderHistory(); renderHeatmap();
-  renderActiveExperiments(); renderArchivedExperiments();
+  renderActiveExperiments(); renderArchivedExperiments(); renderCompletedRoutines();
   checkMilestones(); checkExperiments();
 }
 
@@ -983,10 +992,11 @@ function renderHeatmap(){
 function renderSummary(){
   const host=document.getElementById("summary");
   const rs=state.routines;
+  const active=rs.filter(r=>!r.completed);
   const curMon=getMonday(new Date());
   // this week
   let wkDone=0, wkTarget=0;
-  rs.forEach(r=>{ wkDone+=Math.min(countInWeek(r.id,curMon),r.target); wkTarget+=r.target; });
+  active.forEach(r=>{ wkDone+=Math.min(countInWeek(r.id,curMon),r.target); wkTarget+=r.target; });
   const wkPct=wkTarget?Math.round(wkDone/wkTarget*100):0;
   // overall quote
   let done=0, planned=0;
@@ -1027,13 +1037,14 @@ function renderWeek(){
   document.getElementById("weekRange").textContent =
     `${fmtShort(monday)} – ${fmtShort(sunday)}`+(weekOffset===0?"  ·  diese Woche":"");
   const grid=document.getElementById("weekGrid");
-  if(state.routines.length===0){
-    grid.innerHTML=`<div class="empty">Noch keine Routinen. Klick oben auf <b>Routinen</b>, um deine erste anzulegen.</div>`; return;
+  const active = state.routines.filter(r=>!r.completed);
+  if(active.length===0){
+    grid.innerHTML=`<div class="empty">Noch keine aktiven Routinen. Klick oben auf <b>Routinen</b>, um deine erste anzulegen.</div>`; return;
   }
   let html=`<table class="grid"><thead><tr><th class="namecol"></th>`;
   dates.forEach((ds,i)=>{ const d=parse(ds); html+=`<th class="daydate">${DAYS[i]}<b>${d.getDate()}.</b></th>`; });
   html+=`<th></th></tr></thead><tbody>`;
-  state.routines.forEach(r=>{
+  active.forEach(r=>{
     const done=countInWeek(r.id,monday); const met=done>=r.target;
     html+=`<tr><td class="name">${escapeHtml(r.name)}<span class="tgt">Ziel: ${r.target}× / Woche</span></td>`;
     dates.forEach(ds=>{
@@ -1062,8 +1073,9 @@ function renderWeek(){
 
 function renderStats(){
   const host=document.getElementById("statGrid");
-  if(state.routines.length===0){ host.innerHTML=`<div class="empty">—</div>`; return; }
-  host.innerHTML=state.routines.map(r=>{
+  const active = state.routines.filter(r=>!r.completed);
+  if(active.length===0){ host.innerHTML=`<div class="empty">—</div>`; return; }
+  host.innerHTML=active.map(r=>{
     const weeks=weeksSinceStart(r);
     const planned=weeks*r.target;
     const doneTotal=Object.keys(state.logs[r.id]||{}).length;
@@ -1095,9 +1107,10 @@ function renderStats(){
 
 function renderHistory(){
   const host=document.getElementById("history");
-  if(state.routines.length===0){ host.innerHTML=`<div class="empty">—</div>`; return; }
+  const active = state.routines.filter(r=>!r.completed);
+  if(active.length===0){ host.innerHTML=`<div class="empty">—</div>`; return; }
   const N=12;
-  host.innerHTML=state.routines.map(r=>{
+  host.innerHTML=active.map(r=>{
     let bars="",axis="";
     for(let i=N-1;i>=0;i--){
       const mon=getMonday(addDays(new Date(),-i*7));
@@ -1114,6 +1127,75 @@ function renderHistory(){
 
 function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
+function renderCompletedRoutines(){
+  const host = document.getElementById("completedRoutinesList");
+  const card = document.getElementById("completedRoutinesCard");
+  const completed = state.routines.filter(r => r.completed);
+  
+  if(completed.length === 0){
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "block";
+  
+  host.innerHTML = completed.map(r => {
+    const weeks = weeksSinceStart(r);
+    const planned = weeks * r.target;
+    const doneTotal = Object.keys(state.logs[r.id]||{}).length;
+    const quote = planned ? Math.round(doneTotal / planned * 100) : 0;
+    const days = streakDays(r);
+    
+    return `
+      <div class="archive-item">
+        <div class="archive-header">
+          <div class="archive-title">
+            <span class="swatch" style="background:${r.color}"></span>
+            ${escapeHtml(r.name)}
+          </div>
+          <span class="eval-result success">${quote}% geschafft</span>
+        </div>
+        <div class="exp-meta" style="margin: -2px 0 6px">
+          Laufzeit: ${fmtShort(parse(r.created))}–${fmtShort(parse(r.completedAt))} (${weeks} ${weeks === 1 ? "Woche" : "Wochen"}) · Ziel: ${r.target}× / Woche
+        </div>
+        <div class="sub" style="font-size:12px; color:var(--muted)">
+          <span>Erledigt: <b>${doneTotal}</b> von ${planned} Einheiten</span>
+          <span style="margin-left:12px">Am Ball: <b>${days}</b> Tage</span>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:8px; gap:8px">
+          <button class="link" data-reactivate-rout="${r.id}">Reaktivieren</button>
+          <button class="link" data-del-rout="${r.id}" style="color:var(--bad)">Löschen</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+  
+  host.querySelectorAll("[data-reactivate-rout]").forEach(b => {
+    b.onclick = () => {
+      const rid = b.dataset.reactivateRout;
+      const r = state.routines.find(x => x.id === rid);
+      if(confirm(`Routine „${r.name}" reaktivieren? Sie wird wieder im Wochenplan angezeigt.`)){
+        delete r.completed;
+        delete r.completedAt;
+        save();
+        render();
+      }
+    };
+  });
+  
+  host.querySelectorAll("[data-del-rout]").forEach(b => {
+    b.onclick = () => {
+      const rid = b.dataset.delRout;
+      const r = state.routines.find(x => x.id === rid);
+      if(confirm(`„${r.name}" wirklich endgültig löschen? Alle erfassten Einheiten gehen verloren.`)){
+        state.routines = state.routines.filter(x => x.id !== rid);
+        delete state.logs[rid];
+        save();
+        render();
+      }
+    };
+  });
+}
+
 // ---------- week nav ----------
 document.getElementById("prevWeek").onclick=()=>{ weekOffset--; renderWeek(); };
 document.getElementById("nextWeek").onclick=()=>{ if(weekOffset<0){weekOffset++; renderWeek();} };
@@ -1125,15 +1207,47 @@ document.getElementById("closeManage").onclick=()=>manageOverlay.classList.remov
 manageOverlay.onclick=e=>{ if(e.target===manageOverlay) manageOverlay.classList.remove("show"); };
 function renderManage(){
   const list=document.getElementById("manageList");
-  if(state.routines.length===0){ list.innerHTML=`<div class="empty" style="padding:10px">Noch keine Routinen.</div>`; return; }
-  list.innerHTML=state.routines.map(r=>`
-    <div class="rl-item">
-      <span class="swatch" style="background:${r.color}"></span>
-      <span class="nm">${escapeHtml(r.name)}</span>
-      <span class="tg">${r.target}×/Wo.</span>
-      <button class="link" data-edit="${r.id}">bearbeiten</button>
-      <button class="x" data-del="${r.id}" title="Löschen">×</button>
-    </div>`).join("");
+  const active = state.routines.filter(r => !r.completed);
+  const completed = state.routines.filter(r => r.completed);
+  
+  let html = "";
+  if(active.length === 0 && completed.length === 0){
+    list.innerHTML=`<div class="empty" style="padding:10px">Noch keine Routinen.</div>`;
+    return;
+  }
+  
+  if(active.length > 0){
+    html += active.map(r=>`
+      <div class="rl-item">
+        <span class="swatch" style="background:${r.color}"></span>
+        <span class="nm">${escapeHtml(r.name)}</span>
+        <span class="tg">${r.target}×/Wo.</span>
+        <div style="display:flex; gap:8px; align-items:center">
+          <button class="link" data-edit="${r.id}">bearbeiten</button>
+          <button class="link" data-comp="${r.id}" style="color:var(--good); font-weight:600">abschließen</button>
+          <button class="x" data-del="${r.id}" title="Löschen">×</button>
+        </div>
+      </div>`).join("");
+  }
+  
+  if(completed.length > 0){
+    html += `<div style="margin-top:20px; border-top:1px solid var(--line); padding-top:12px">
+      <h3 style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 10px; font-weight:700">Abgeschlossen</h3>
+    </div>`;
+    html += completed.map(r=>`
+      <div class="rl-item" style="opacity:0.7">
+        <span class="swatch" style="background:${r.color}"></span>
+        <span class="nm" style="text-decoration:line-through">${escapeHtml(r.name)}</span>
+        <span class="tg">${r.target}×/Wo.</span>
+        <div style="display:flex; gap:8px; align-items:center">
+          <button class="link" data-reactivate="${r.id}">reaktivieren</button>
+          <button class="x" data-del="${r.id}" title="Löschen">×</button>
+        </div>
+      </div>`).join("");
+  }
+  
+  list.innerHTML = html;
+  
   list.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
     const r=state.routines.find(x=>x.id===b.dataset.del);
     if(confirm(`„${r.name}" wirklich löschen? Alle erfassten Einheiten gehen verloren.`)){
@@ -1141,7 +1255,26 @@ function renderManage(){
       delete state.logs[b.dataset.del]; save(); renderManage(); render();
     }
   });
+  
   list.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));
+  
+  list.querySelectorAll("[data-comp]").forEach(b=>b.onclick=()=>{
+    const r=state.routines.find(x=>x.id===b.dataset.comp);
+    if(confirm(`„${r.name}" abschließen? Sie wird archiviert und nicht mehr im Wochenplan angezeigt.`)){
+      r.completed=true;
+      r.completedAt=todayStr();
+      save(); renderManage(); render();
+    }
+  });
+  
+  list.querySelectorAll("[data-reactivate]").forEach(b=>b.onclick=()=>{
+    const r=state.routines.find(x=>x.id===b.dataset.reactivate);
+    if(confirm(`„${r.name}" reaktivieren? Sie wird wieder im Wochenplan angezeigt.`)){
+      delete r.completed;
+      delete r.completedAt;
+      save(); renderManage(); render();
+    }
+  });
 }
 
 // ---------- edit ----------
