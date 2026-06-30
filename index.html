@@ -286,6 +286,10 @@
       <input type="text" id="rName" placeholder="z.B. Physio, Laufen, Lesen …">
     </div>
     <div class="field">
+      <label>Beschreibung / Kriterium (optional)</label>
+      <input type="text" id="rDesc" placeholder="z.B. mind. 30 Min., max. 10 Min. am Handy …">
+    </div>
+    <div class="field">
       <label>Ziel pro Woche (wie oft?)</label>
       <input type="number" id="rTarget" min="1" max="14" value="3">
     </div>
@@ -336,6 +340,10 @@
     <div class="field">
       <label>Name des Experiments</label>
       <input type="text" id="expName" placeholder="z.B. 7 Tage kein Social Media, 2x/Woche joggen …">
+    </div>
+    <div class="field">
+      <label>Beschreibung / Kriterium (optional)</label>
+      <input type="text" id="expDesc" placeholder="z.B. max. 10 Min. Social Media, mind. 30 Min. Joggen …">
     </div>
     <div class="field">
       <label>Dauer (Wochen)</label>
@@ -702,7 +710,9 @@ function renderActiveExperiments(){
     const targetText = isWeekly ? `${exp.target}× / Wo.` : "Täglich";
     const progressText = prog.details;
     
+    const descHtml = exp.desc ? `<div class="exp-meta" style="font-style:italic; font-weight:normal; margin-bottom:2px">${escapeHtml(exp.desc)}</div>` : "";
     html += `<tr><td class="name">${escapeHtml(exp.name)}
+      ${descHtml}
       <div class="exp-meta"><span class="swatch" style="background:${exp.color}; display:inline-block; vertical-align:middle; margin-right:4px"></span>Laufzeit: ${fmtShort(start)}–${fmtShort(end)} · ${targetText}</div>
       <div class="exp-meta" style="color:var(--accent); font-weight:600">${progressText}</div>
     </td>`;
@@ -790,6 +800,7 @@ function renderArchivedExperiments(){
     const { start, end } = getExperimentDates(exp);
     const targetText = exp.frequencyType === "weekly" ? `${exp.target}× / Wo.` : "Täglich";
     
+    const descHtml = exp.desc ? `<div class="exp-meta" style="font-style:italic; font-weight:normal; margin-top:-4px; margin-bottom:4px">${escapeHtml(exp.desc)}</div>` : "";
     return `
       <div class="archive-item">
         <div class="archive-header">
@@ -799,6 +810,7 @@ function renderArchivedExperiments(){
           </div>
           <span class="eval-result ${success ? "success" : "fail"}">${success ? "Geschafft 🎉" : "Beendet"}</span>
         </div>
+        ${descHtml}
         <div class="exp-meta" style="margin: -2px 0 6px">
           Laufzeit: ${fmtShort(start)}–${fmtShort(end)} (${exp.durationWeeks} ${exp.durationWeeks === 1 ? "Woche" : "Wochen"}) · Häufigkeit: ${targetText}
         </div>
@@ -848,8 +860,11 @@ function renderExpManage(){
   list.innerHTML = activeExps.map(exp => `
     <div class="rl-item">
       <span class="swatch" style="background:${exp.color}"></span>
-      <span class="nm">${escapeHtml(exp.name)}</span>
-      <span class="tg">${exp.frequencyType === "weekly" ? exp.target + "×/Wo." : "Täglich"}</span>
+      <div style="flex:1; display:flex; flex-direction:column; min-width:0">
+        <span class="nm" style="font-weight:700">${escapeHtml(exp.name)}</span>
+        ${exp.desc ? `<span class="desc" style="font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${escapeHtml(exp.desc)}</span>` : ""}
+      </div>
+      <span class="tg" style="font-size:12px; color:var(--muted); margin-left:8px; margin-right:8px">${exp.frequencyType === "weekly" ? exp.target + "×/Wo." : "Täglich"}</span>
       <button class="link" data-edit-exp="${exp.id}">bearbeiten</button>
       <button class="x" data-del-exp-active="${exp.id}" title="Löschen">×</button>
     </div>`).join("");
@@ -894,6 +909,7 @@ function openExpEdit(id){
   
   document.getElementById("expEditTitle").textContent = exp ? "Experiment bearbeiten" : "Neues Experiment";
   document.getElementById("expName").value = exp ? exp.name : "";
+  document.getElementById("expDesc").value = exp ? exp.desc || "" : "";
   document.getElementById("expDuration").value = exp ? exp.durationWeeks : 1;
   
   const freqType = exp ? exp.frequencyType : "daily";
@@ -915,6 +931,7 @@ expEditOverlay.onclick = e => { if(e.target === expEditOverlay) expEditOverlay.c
 
 document.getElementById("saveExpEdit").onclick = () => {
   const name = document.getElementById("expName").value.trim();
+  const desc = document.getElementById("expDesc").value.trim();
   const duration = Math.max(1, Math.min(12, parseInt(document.getElementById("expDuration").value) || 1));
   const freqType = document.querySelector('input[name="expFreqType"]:checked').value;
   const target = freqType === "daily" ? 7 : Math.max(1, Math.min(7, parseInt(document.getElementById("expTarget").value) || 1));
@@ -925,6 +942,7 @@ document.getElementById("saveExpEdit").onclick = () => {
   if(editingExpId){
     const exp = state.experiments.find(x => x.id === editingExpId);
     exp.name = name;
+    exp.desc = desc;
     exp.durationWeeks = duration;
     exp.frequencyType = freqType;
     exp.target = target;
@@ -934,6 +952,7 @@ document.getElementById("saveExpEdit").onclick = () => {
     state.experiments.push({
       id: uid(),
       name,
+      desc,
       durationWeeks: duration,
       frequencyType: freqType,
       target,
@@ -953,6 +972,9 @@ document.getElementById("saveExpEdit").onclick = () => {
 };
 
 document.getElementById("expName").addEventListener("keydown", e => {
+  if(e.key === "Enter") document.getElementById("saveExpEdit").click();
+});
+document.getElementById("expDesc").addEventListener("keydown", e => {
   if(e.key === "Enter") document.getElementById("saveExpEdit").click();
 });
 
@@ -1046,7 +1068,8 @@ function renderWeek(){
   html+=`<th></th></tr></thead><tbody>`;
   active.forEach(r=>{
     const done=countInWeek(r.id,monday); const met=done>=r.target;
-    html+=`<tr><td class="name">${escapeHtml(r.name)}<span class="tgt">Ziel: ${r.target}× / Woche</span></td>`;
+    const descHtml = r.desc ? `<span class="desc" style="display:block; font-size:11px; color:var(--muted); font-weight:normal; margin-top:2px">${escapeHtml(r.desc)}</span>` : "";
+    html+=`<tr><td class="name">${escapeHtml(r.name)}<span class="tgt">Ziel: ${r.target}× / Woche</span>${descHtml}</td>`;
     dates.forEach(ds=>{
       const future=ds>tStr; const on=isDone(r.id,ds);
       const cls=["cell"]; if(on)cls.push("on"); if(future)cls.push("future"); if(ds===tStr)cls.push("today-mark");
@@ -1092,9 +1115,11 @@ function renderStats(){
       const m=MILESTONES.find(x=>x.days===d);
       return m?`<span class="badge${m.gold?" gold":""}">${m.icon} ${d} Tage</span>`:"";
     }).join("");
+    const descHtml = r.desc ? `<div style="font-size:11px; color:var(--muted); margin:-8px 0 10px 20px; font-weight:normal; font-style:italic">${escapeHtml(r.desc)}</div>` : "";
     return `
       <div class="stat">
         <div class="label"><span class="swatch" style="background:${r.color}"></span>${escapeHtml(r.name)}</div>
+        ${descHtml}
         <div class="quote">${quote}<small>%</small></div>
         <div class="bar"><div style="width:${Math.min(100,quote)}%;background:${r.color}"></div></div>
         <div class="sub"><span><b>${doneTotal}</b>/${planned} Einheiten</span><span>letzte 4 Wo.: <b>${l4}%</b></span></div>
@@ -1145,6 +1170,7 @@ function renderCompletedRoutines(){
     const quote = planned ? Math.round(doneTotal / planned * 100) : 0;
     const days = streakDays(r);
     
+    const descHtml = r.desc ? `<div class="exp-meta" style="font-style:italic; font-weight:normal; margin-top:-4px; margin-bottom:4px">${escapeHtml(r.desc)}</div>` : "";
     return `
       <div class="archive-item">
         <div class="archive-header">
@@ -1154,6 +1180,7 @@ function renderCompletedRoutines(){
           </div>
           <span class="eval-result success">${quote}% geschafft</span>
         </div>
+        ${descHtml}
         <div class="exp-meta" style="margin: -2px 0 6px">
           Laufzeit: ${fmtShort(parse(r.created))}–${fmtShort(parse(r.completedAt))} (${weeks} ${weeks === 1 ? "Woche" : "Wochen"}) · Ziel: ${r.target}× / Woche
         </div>
@@ -1220,8 +1247,11 @@ function renderManage(){
     html += active.map(r=>`
       <div class="rl-item">
         <span class="swatch" style="background:${r.color}"></span>
-        <span class="nm">${escapeHtml(r.name)}</span>
-        <span class="tg">${r.target}×/Wo.</span>
+        <div style="flex:1; display:flex; flex-direction:column; min-width:0">
+          <span class="nm" style="font-weight:700">${escapeHtml(r.name)}</span>
+          ${r.desc ? `<span class="desc" style="font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${escapeHtml(r.desc)}</span>` : ""}
+        </div>
+        <span class="tg" style="font-size:12px; color:var(--muted); margin-left:8px; margin-right:8px">${r.target}×/Wo.</span>
         <div style="display:flex; gap:8px; align-items:center">
           <button class="link" data-edit="${r.id}">bearbeiten</button>
           <button class="link" data-comp="${r.id}" style="color:var(--good); font-weight:600">abschließen</button>
@@ -1237,8 +1267,11 @@ function renderManage(){
     html += completed.map(r=>`
       <div class="rl-item" style="opacity:0.7">
         <span class="swatch" style="background:${r.color}"></span>
-        <span class="nm" style="text-decoration:line-through">${escapeHtml(r.name)}</span>
-        <span class="tg">${r.target}×/Wo.</span>
+        <div style="flex:1; display:flex; flex-direction:column; min-width:0">
+          <span class="nm" style="font-weight:700; text-decoration:line-through">${escapeHtml(r.name)}</span>
+          ${r.desc ? `<span class="desc" style="font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:line-through">${escapeHtml(r.desc)}</span>` : ""}
+        </div>
+        <span class="tg" style="font-size:12px; color:var(--muted); margin-left:8px; margin-right:8px">${r.target}×/Wo.</span>
         <div style="display:flex; gap:8px; align-items:center">
           <button class="link" data-reactivate="${r.id}">reaktivieren</button>
           <button class="x" data-del="${r.id}" title="Löschen">×</button>
@@ -1291,6 +1324,7 @@ function openEdit(id){
   const r=id?state.routines.find(x=>x.id===id):null;
   document.getElementById("editTitle").textContent=r?"Routine bearbeiten":"Neue Routine";
   document.getElementById("rName").value=r?r.name:"";
+  document.getElementById("rDesc").value=r?r.desc||"":"";
   document.getElementById("rTarget").value=r?r.target:3;
   document.getElementById("rStart").value=r?r.created:todayStr();
   pickedColor=r?r.color:PALETTE[state.routines.length%PALETTE.length];
@@ -1301,14 +1335,16 @@ document.getElementById("cancelEdit").onclick=()=>editOverlay.classList.remove("
 editOverlay.onclick=e=>{ if(e.target===editOverlay) editOverlay.classList.remove("show"); };
 document.getElementById("saveEdit").onclick=()=>{
   const name=document.getElementById("rName").value.trim();
+  const desc=document.getElementById("rDesc").value.trim();
   const target=Math.max(1,Math.min(14,parseInt(document.getElementById("rTarget").value)||1));
   const start=document.getElementById("rStart").value || todayStr();
   if(!name){ alert("Bitte einen Namen eingeben."); return; }
-  if(editingId){ const r=state.routines.find(x=>x.id===editingId); r.name=name; r.target=target; r.color=pickedColor; r.created=start; }
-  else state.routines.push({id:uid(),name,target,color:pickedColor,created:start});
+  if(editingId){ const r=state.routines.find(x=>x.id===editingId); r.name=name; r.desc=desc; r.target=target; r.color=pickedColor; r.created=start; }
+  else state.routines.push({id:uid(),name,desc,target,color:pickedColor,created:start});
   save(); editOverlay.classList.remove("show"); renderManage(); render();
 };
 document.getElementById("rName").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("saveEdit").click(); });
+document.getElementById("rDesc").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("saveEdit").click(); });
 
 // ---------- export / import ----------
 document.getElementById("exportBtn").onclick=()=>{
